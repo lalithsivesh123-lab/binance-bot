@@ -1,2 +1,7 @@
-python-binance
-pandas
+import time
+
+print("🚀 BOT SAFE MODE RUNNING")
+
+while True:
+    print("✅ Running...")
+    time.sleep(10)

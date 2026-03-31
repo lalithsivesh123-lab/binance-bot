@@ -1,5 +1,7 @@
 import time
 
+print("🚀 BOT STARTED")
+
 while True:
-    print("Bot Running Successfully 🚀")
-    time.sleep(10)
+    print("🔥 BOT IS RUNNING...")
+    time.sleep(5)

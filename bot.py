@@ -1,38 +1,36 @@
+from flask import Flask
 from binance.client import Client
-import pandas as pd
-import time
-import os
+import os, time, requests
+
+app = Flask(__name__)
 
 API_KEY = os.getenv("API_KEY")
 API_SECRET = os.getenv("API_SECRET")
 
-print("🚀 BOT STARTED")
+TOKEN = os.getenv("TELEGRAM_TOKEN")
+CHAT_ID = os.getenv("CHAT_ID")
 
 client = Client(API_KEY, API_SECRET)
 
 SYMBOL = "BTCUSDT"
 
-def get_data():
-    klines = client.get_klines(symbol=SYMBOL, interval="1m", limit=50)
-    df = pd.DataFrame(klines)
-    df[4] = df[4].astype(float)
-    return df
+def send(msg):
+    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+    requests.post(url, data={"chat_id": CHAT_ID, "text": msg})
 
-while True:
-    try:
-        df = get_data()
-        price = df[4].iloc[-1]
-        avg = df[4].mean()
+def run_bot():
+    while True:
+        price = float(client.get_symbol_ticker(symbol=SYMBOL)['price'])
 
-        print(f"Price: {price} | Avg: {avg}")
+        if int(price) % 2 == 0:
+            qty = 0.001
+            client.order_market_buy(symbol=SYMBOL, quantity=qty)
+            send(f"BUY at {price}")
 
-        if price > avg:
-            print("📈 Signal: BUY")
-        else:
-            print("📉 Signal: SELL")
+        time.sleep(60)
 
-        time.sleep(10)
+@app.route('/')
+def home():
+    return "Bot Running 🤖"
 
-    except Exception as e:
-        print("❌ ERROR:", e)
-        time.sleep(5)
+run_bot()

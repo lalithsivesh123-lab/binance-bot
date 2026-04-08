@@ -33,4 +33,9 @@ def run_bot():
 def home():
     return "Bot Running 🤖"
 
-run_bot()
+import threading
+
+threading.Thread(target=run_bot).start()
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=10000)

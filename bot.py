@@ -34,7 +34,7 @@ def run_bot():
 
 # Start bot in background
 thread = threading.Thread(target=run_bot)
-thread.daemon = True
+thread.daemon = False
 thread.start()
 
 # Run Flask server (REQUIRED for Render)

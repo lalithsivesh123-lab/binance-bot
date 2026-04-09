@@ -11,7 +11,7 @@ def home():
     return "✅ Bot is running!"
 
 def run_bot():
-    print("✅ Bot started successfully")
+    print("✅ Bot started successfully", flush=True)
 
     while True:
         try:
@@ -20,22 +20,19 @@ def run_bot():
             data = response.json()
 
             price = float(data['price'])
-            print(f"💰 BTC Price: {price}")
+            print(f"💰 BTC Price: {price}", flush=True)
 
             if price > 50000:
-                print("📈 BUY signal")
+                print("📈 BUY signal", flush=True)
             else:
-                print("📉 SELL signal")
+                print("📉 SELL signal", flush=True)
 
         except Exception as e:
-            print("❌ Error:", e)
+            print("❌ Error:", e, flush=True)
 
         time.sleep(10)
 
-# 👇 IMPORTANT: start bot BEFORE app.run()
-bot_thread = Thread(target=run_bot)
-bot_thread.start()
+Thread(target=run_bot).start()
 
-# 👇 Flask must be last
 port = int(os.environ.get("PORT", 10000))
 app.run(host="0.0.0.0", port=port)

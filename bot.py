@@ -1,8 +1,8 @@
 import os
-import threading
 import time
 import requests
 from flask import Flask
+from threading import Thread
 
 app = Flask(__name__)
 
@@ -15,11 +15,11 @@ def run_bot():
 
     while True:
         try:
-            # Binance BTC price
             url = "https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT"
-            data = requests.get(url, timeout=5).json()
-            price = float(data['price'])
+            response = requests.get(url, timeout=5)
+            data = response.json()
 
+            price = float(data['price'])
             print(f"💰 BTC Price: {price}")
 
             if price > 50000:
@@ -32,9 +32,10 @@ def run_bot():
 
         time.sleep(10)
 
-# Start bot in background
-threading.Thread(target=run_bot).start()
+# 👇 IMPORTANT: start bot BEFORE app.run()
+bot_thread = Thread(target=run_bot)
+bot_thread.start()
 
-# Run Flask server (REQUIRED for Render)
+# 👇 Flask must be last
 port = int(os.environ.get("PORT", 10000))
 app.run(host="0.0.0.0", port=port)

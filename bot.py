@@ -17,7 +17,7 @@ def run_bot():
         try:
             # Binance BTC price
             url = "https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT"
-            data = requests.get(url).json()
+            data = requests.get(url, timeout=5).json()
             price = float(data['price'])
 
             print(f"💰 BTC Price: {price}")

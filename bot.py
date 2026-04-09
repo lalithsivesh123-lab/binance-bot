@@ -1,14 +1,29 @@
+import os
+import threading
 import time
+from flask import Flask
 
-print("✅ Bot started successfully")
+app = Flask(__name__)
 
-while True:
-    print("🔄 Bot is running and checking market...")
+@app.route('/')
+def home():
+    return "✅ Bot is running!"
 
-    # Dummy logic (just for testing)
-    price = 100
+def run_bot():
+    print("✅ Bot started successfully")
+    
+    while True:
+        print("🔄 Bot is running and checking market...")
+        
+        price = 100
+        if price > 90:
+            print("📈 BUY signal")
+        
+        time.sleep(10)
 
-    if price > 90:
-        print("📈 Condition met → BUY signal")
+# Run bot in background
+threading.Thread(target=run_bot).start()
 
-    time.sleep(10)
+# Required for Render Web Service
+port = int(os.environ.get("PORT", 10000))
+app.run(host="0.0.0.0", port=port)

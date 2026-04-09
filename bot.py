@@ -1,19 +1,27 @@
-def run_bot():
-    import time
-    import requests
+import os
+import threading
+import time
+import requests
+from flask import Flask
 
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "✅ Bot is running!"
+
+def run_bot():
     print("✅ Bot started successfully")
 
     while True:
         try:
-            # Get BTC price from Binance
+            # Binance BTC price
             url = "https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT"
             data = requests.get(url).json()
             price = float(data['price'])
 
             print(f"💰 BTC Price: {price}")
 
-            # Simple strategy (test)
             if price > 50000:
                 print("📈 BUY signal")
             else:
@@ -23,3 +31,12 @@ def run_bot():
             print("❌ Error:", e)
 
         time.sleep(10)
+
+# Start bot in background
+thread = threading.Thread(target=run_bot)
+thread.daemon = True
+thread.start()
+
+# Run Flask server (REQUIRED for Render)
+port = int(os.environ.get("PORT", 10000))
+app.run(host="0.0.0.0", port=port)

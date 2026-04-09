@@ -33,9 +33,7 @@ def run_bot():
         time.sleep(10)
 
 # Start bot in background
-thread = threading.Thread(target=run_bot)
-thread.daemon = False
-thread.start()
+threading.Thread(target=run_bot).start()
 
 # Run Flask server (REQUIRED for Render)
 port = int(os.environ.get("PORT", 10000))

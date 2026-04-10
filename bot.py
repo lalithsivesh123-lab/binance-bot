@@ -62,7 +62,7 @@ def run_bot():
             # =========================
             if not in_position:
 
-                if latest_rsi < 60 and latest_price > latest_ema and latest_price > latest_vwap:
+             if latest_price > latest_vwap:
                     print("🚀 BUY SIGNAL", flush=True)
 
                     order = client.order_market_buy(

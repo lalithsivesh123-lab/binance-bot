@@ -56,7 +56,7 @@ def run_bot():
 
             print(f"\n💰 Price: {latest_price}", flush=True)
             print(f"📉 RSI: {latest_rsi}", flush=True)
-
+            print(f"📊 VWAP: {latest_vwap}", flush=True)
             # =========================
             # ENTRY LOGIC
             # =========================

@@ -62,18 +62,17 @@ def run_bot():
             # =========================
             if not in_position:
 
-             if latest_price > latest_vwap:
-                    print("🚀 BUY SIGNAL", flush=True)
+    print("🚀 FORCE BUY TEST", flush=True)
 
-                    order = client.order_market_buy(
-                        symbol=SYMBOL,
-                        quantity=QUANTITY
-                    )
+    order = client.order_market_buy(
+        symbol=SYMBOL,
+        quantity=QUANTITY
+    )
 
-                    entry_price = latest_price
-                    in_position = True
+    entry_price = latest_price
+    in_position = True
 
-                    print(f"✅ Bought at {entry_price}", flush=True)
+    print(f"✅ Bought at {entry_price}", flush=True)
 
             # =========================
             # EXIT LOGIC (SL / TARGET)

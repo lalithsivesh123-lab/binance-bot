@@ -16,8 +16,8 @@ def home():
 # =========================
 # 🔑 TESTNET API KEYS
 # =========================
-API_KEY = "PASTE_YOUR_TESTNET_API_KEY"
-API_SECRET = "PASTE_YOUR_TESTNET_SECRET"
+API_KEY = KlvlOTFkYvR2fTuUhL2d7HQQKGVvPhbenqcizJVzbQONxKeu2xlow6DEwf4QEbWy
+API_SECRET = WTDEHBRqz6nOXaje8Ii2K1caFp25ffE5PMvBYkTF5rdA6UXeIv4533hiNAUM9ZTG
 
 client = Client(API_KEY, API_SECRET)
 client.API_URL = "https://testnet.binance.vision/api"

@@ -1,4 +1,3 @@
-import os
 import time
 import requests
 import pandas as pd
@@ -12,25 +11,25 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "🤖 AI Trading Bot Running!"
+    return "🤖 AI Testnet Trading Bot Running!"
 
 # =========================
-# BINANCE SETUP (TESTNET)
+# 🔑 TESTNET API KEYS
 # =========================
-API_KEY = "YOUR_TESTNET_API_KEY"
-API_SECRET = "YOUR_TESTNET_SECRET"
+API_KEY = "PASTE_YOUR_TESTNET_API_KEY"
+API_SECRET = "PASTE_YOUR_TESTNET_SECRET"
 
 client = Client(API_KEY, API_SECRET)
 client.API_URL = "https://testnet.binance.vision/api"
 
 SYMBOL = "BTCUSDT"
-QUANTITY = 0.001
+QUANTITY = 0.001  # safe test size
 
 in_position = False
 entry_price = 0
 
 # =========================
-# AI DECISION FUNCTION
+# 🤖 AI DECISION FUNCTION
 # =========================
 def ai_decision(rsi, price, ema, vwap):
     score = 0
@@ -58,10 +57,11 @@ def ai_decision(rsi, price, ema, vwap):
 def run_bot():
     global in_position, entry_price
 
-    print("🤖 AI Auto Trading Started", flush=True)
+    print("🤖 Testnet Auto Trading Started", flush=True)
 
     while True:
         try:
+            # Get market data
             url = f"https://api.binance.com/api/v3/klines?symbol={SYMBOL}&interval=1m&limit=50"
             data = requests.get(url).json()
 
@@ -73,6 +73,7 @@ def run_bot():
             df["close"] = df["close"].astype(float)
             df["volume"] = df["volume"].astype(float)
 
+            # Indicators
             rsi = RSIIndicator(df["close"]).rsi()
             ema = EMAIndicator(df["close"], window=9).ema_indicator()
             df["vwap"] = (df["close"] * df["volume"]).cumsum() / df["volume"].cumsum()
@@ -107,14 +108,11 @@ def run_bot():
 
                     print(f"✅ Bought at {entry_price}", flush=True)
 
-                elif decision <= -2:
-                    print("🔻 AI SELL SIGNAL (skip for now)", flush=True)
-
                 else:
                     print("⏳ No trade", flush=True)
 
             # =========================
-            # EXIT
+            # EXIT (SL / TARGET)
             # =========================
             elif in_position:
 
@@ -153,5 +151,4 @@ def run_bot():
 
 Thread(target=run_bot).start()
 
-port = int(os.environ.get("PORT", 10000))
-app.run(host="0.0.0.0", port=port)
+app.run(host="0.0.0.0", port=10000)

@@ -102,7 +102,7 @@ def run_bot():
             # =========================
             if not in_position:
 
-                if decision >= 3 and latest_price > latest_ema and latest_price > latest_vwap:
+                if decision >= 2 and latest_price > latest_ema and latest_price > latest_vwap:
 
                     print("🚀 STRONG AI BUY SIGNAL", flush=True)
 

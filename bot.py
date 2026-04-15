@@ -1,3 +1,4 @@
+import os
 import time
 import requests
 import pandas as pd
@@ -11,39 +12,45 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "🤖 AI Testnet Trading Bot Running!"
+    return "🤖 Smart AI Testnet Bot Running!"
 
 # =========================
-# 🔑 TESTNET API KEYS
+# 🔑 API KEYS (ENV VARIABLES)
 # =========================
-API_KEY = KlvlOTFkYvR2fTuUhL2d7HQQKGVvPhbenqcizJVzbQONxKeu2xlow6DEwf4QEbWy
-API_SECRET = WTDEHBRqz6nOXaje8Ii2K1caFp25ffE5PMvBYkTF5rdA6UXeIv4533hiNAUM9ZTG
+API_KEY = os.environ.get("API_KEY")
+API_SECRET = os.environ.get("API_SECRET")
 
 client = Client(API_KEY, API_SECRET)
 client.API_URL = "https://testnet.binance.vision/api"
 
+# =========================
+# SETTINGS
+# =========================
 SYMBOL = "BTCUSDT"
-QUANTITY = 0.001  # safe test size
+QUANTITY = 0.001
 
 in_position = False
 entry_price = 0
 
 # =========================
-# 🤖 AI DECISION FUNCTION
+# 🤖 SMART AI LOGIC
 # =========================
 def ai_decision(rsi, price, ema, vwap):
     score = 0
 
+    # RSI
     if rsi < 35:
-        score += 1
+        score += 2
     elif rsi > 65:
-        score -= 1
+        score -= 2
 
+    # EMA trend
     if price > ema:
         score += 1
     else:
         score -= 1
 
+    # VWAP trend
     if price > vwap:
         score += 1
     else:
@@ -57,7 +64,7 @@ def ai_decision(rsi, price, ema, vwap):
 def run_bot():
     global in_position, entry_price
 
-    print("🤖 Testnet Auto Trading Started", flush=True)
+    print("🤖 Smart AI Trading Started", flush=True)
 
     while True:
         try:
@@ -91,12 +98,13 @@ def run_bot():
             print(f"🤖 AI Score: {decision}", flush=True)
 
             # =========================
-            # ENTRY
+            # ENTRY (SMART)
             # =========================
             if not in_position:
 
-                if decision >= 2:
-                    print("🚀 AI BUY SIGNAL", flush=True)
+                if decision >= 3 and latest_price > latest_ema and latest_price > latest_vwap:
+
+                    print("🚀 STRONG AI BUY SIGNAL", flush=True)
 
                     order = client.order_market_buy(
                         symbol=SYMBOL,
@@ -109,15 +117,15 @@ def run_bot():
                     print(f"✅ Bought at {entry_price}", flush=True)
 
                 else:
-                    print("⏳ No trade", flush=True)
+                    print("⏳ No strong trade", flush=True)
 
             # =========================
-            # EXIT (SL / TARGET)
+            # EXIT (SMART SL/TP)
             # =========================
             elif in_position:
 
-                stop_loss = entry_price * 0.99
-                target = entry_price * 1.02
+                stop_loss = entry_price * 0.995
+                target = entry_price * 1.015
 
                 print(f"🛑 SL: {stop_loss} | 🎯 Target: {target}", flush=True)
 
@@ -149,6 +157,9 @@ def run_bot():
 
         time.sleep(20)
 
+# Run bot in background
 Thread(target=run_bot).start()
 
-app.run(host="0.0.0.0", port=10000)
+# Required for Render
+port = int(os.environ.get("PORT", 10000))
+app.run(host="0.0.0.0", port=port)

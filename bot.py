@@ -12,7 +12,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "🤖 Ultra Pro AI Bot Running!"
+    return "🤖 24/7 Ultra Pro Bot Running!"
 
 # =========================
 # ENV VARIABLES
@@ -74,13 +74,10 @@ def trend_5m():
     ema21 = EMAIndicator(close, window=21).ema_indicator()
     ema50 = EMAIndicator(close, window=50).ema_indicator()
 
-    if ema21.iloc[-1] > ema50.iloc[-1]:
-        return "UP"
-    else:
-        return "DOWN"
+    return "UP" if ema21.iloc[-1] > ema50.iloc[-1] else "DOWN"
 
 # =========================
-# AI DECISION (HIGH ACCURACY)
+# AI DECISION
 # =========================
 def ai_decision(df):
     close = df["close"]
@@ -92,138 +89,108 @@ def ai_decision(df):
 
     latest_price = close.iloc[-1]
     latest_rsi = rsi.iloc[-1]
-    latest_ema21 = ema21.iloc[-1]
-    latest_ema50 = ema50.iloc[-1]
     latest_vwap = vwap.iloc[-1]
 
     score = 0
 
-    # Trend
-    if latest_ema21 > latest_ema50:
+    if ema21.iloc[-1] > ema50.iloc[-1]:
         score += 2
     else:
         score -= 2
 
-    # Price above EMA
-    if latest_price > latest_ema21:
+    if latest_price > ema21.iloc[-1]:
         score += 1
 
-    # VWAP
     if latest_price > latest_vwap:
         score += 1
 
-    # RSI zone
     if 30 < latest_rsi < 45:
         score += 2
 
-    # Momentum candle
     if close.iloc[-1] > close.iloc[-2]:
         score += 1
 
     return score, latest_price, latest_rsi, latest_vwap
 
 # =========================
-# MAIN BOT
+# STRATEGY
 # =========================
-def run_bot():
+def run_strategy():
     global in_position, entry_price, total_profit, trade_count
 
-    print("🔥 ULTRA PRO BOT STARTED", flush=True)
+    df = get_klines("1m")
+    trend = trend_5m()
+
+    score, price, rsi, vwap = ai_decision(df)
+
+    print(f"\n💰 Price: {price}", flush=True)
+    print(f"📉 RSI: {rsi}", flush=True)
+    print(f"📊 VWAP: {vwap}", flush=True)
+    print(f"📊 5M Trend: {trend}", flush=True)
+    print(f"🤖 AI Score: {score}", flush=True)
+
+    # ENTRY
+    if not in_position:
+        if score >= 5 and trend == "UP" and rsi < 50:
+
+            print("🚀 STRONG BUY", flush=True)
+            send_telegram(f"🚀 BUY\nPrice: {price}\nScore: {score}")
+
+            client.order_market_buy(symbol=SYMBOL, quantity=QUANTITY)
+
+            entry_price = price
+            in_position = True
+
+        else:
+            print("⏳ No trade", flush=True)
+
+    # EXIT (TRAILING)
+    else:
+        profit_percent = (price - entry_price) / entry_price * 100
+        stop_loss = entry_price * 0.995
+
+        if profit_percent > 0.5:
+            stop_loss = entry_price
+        if profit_percent > 1:
+            stop_loss = entry_price * 1.003
+        if profit_percent > 2:
+            stop_loss = entry_price * 1.01
+
+        print(f"📈 Profit: {profit_percent:.2f}%", flush=True)
+        print(f"🛑 SL: {stop_loss}", flush=True)
+
+        if price <= stop_loss:
+            print("❌ EXIT", flush=True)
+
+            client.order_market_sell(symbol=SYMBOL, quantity=QUANTITY)
+
+            profit = (price - entry_price) * QUANTITY
+            total_profit += profit
+            trade_count += 1
+
+            send_telegram(f"❌ EXIT\nProfit: {profit}\nTotal: {total_profit}")
+
+            in_position = False
+
+        else:
+            print("⏳ Holding", flush=True)
+
+# =========================
+# MAIN LOOP (AUTO-RESTART)
+# =========================
+def run_bot():
+    print("🔥 BOT STARTED (24/7 MODE)", flush=True)
+    send_telegram("🤖 Bot Started & Running 24/7")
 
     while True:
         try:
-            df = get_klines("1m")
-            trend = trend_5m()
-
-            score, price, rsi, vwap = ai_decision(df)
-
-            print(f"\n💰 Price: {price}", flush=True)
-            print(f"📉 RSI: {rsi}", flush=True)
-            print(f"📊 VWAP: {vwap}", flush=True)
-            print(f"📊 5M Trend: {trend}", flush=True)
-            print(f"🤖 AI Score: {score}", flush=True)
-
-            # =========================
-            # ENTRY
-            # =========================
-            if not in_position:
-
-                if score >= 5 and trend == "UP":
-
-                    print("🚀 STRONG BUY SIGNAL", flush=True)
-
-                    send_telegram(f"""
-🚀 STRONG BUY
-Price: {price}
-RSI: {rsi}
-Trend: {trend}
-""")
-
-                    client.order_market_buy(
-                        symbol=SYMBOL,
-                        quantity=QUANTITY
-                    )
-
-                    entry_price = price
-                    in_position = True
-
-                    print(f"✅ Bought at {entry_price}", flush=True)
-
-                else:
-                    print("⏳ No trade", flush=True)
-
-            # =========================
-            # EXIT (TRAILING STOP)
-            # =========================
-            else:
-
-                profit_percent = (price - entry_price) / entry_price * 100
-                stop_loss = entry_price * 0.995
-
-                if profit_percent > 0.5:
-                    stop_loss = entry_price
-
-                if profit_percent > 1:
-                    stop_loss = entry_price * 1.003
-
-                if profit_percent > 2:
-                    stop_loss = entry_price * 1.01
-
-                print(f"📈 Profit: {profit_percent:.2f}%", flush=True)
-                print(f"🛑 Trailing SL: {stop_loss}", flush=True)
-
-                if price <= stop_loss:
-
-                    print("❌ EXIT", flush=True)
-
-                    client.order_market_sell(
-                        symbol=SYMBOL,
-                        quantity=QUANTITY
-                    )
-
-                    profit = (price - entry_price) * QUANTITY
-                    total_profit += profit
-                    trade_count += 1
-
-                    send_telegram(f"""
-❌ EXIT
-Price: {price}
-Profit: {profit}
-Total: {total_profit}
-Trades: {trade_count}
-""")
-
-                    in_position = False
-
-                else:
-                    print("⏳ Holding", flush=True)
-
+            run_strategy()
         except Exception as e:
-            print("❌ Error:", str(e), flush=True)
+            print("❌ ERROR:", str(e), flush=True)
+            send_telegram(f"⚠️ Error: {str(e)}")
+            time.sleep(10)
 
-        time.sleep(20)
-
-# Run bot
+# Run in background
 Thread(target=run_bot).start()
 
 # Render server

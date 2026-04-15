@@ -12,7 +12,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "🤖 Smart AI Bot Running!"
+    return "🤖 AI PRO Trading Bot Running!"
 
 # =========================
 # 🔑 ENV VARIABLES
@@ -33,9 +33,11 @@ QUANTITY = 0.001
 
 in_position = False
 entry_price = 0
+total_profit = 0
+trade_count = 0
 
 # =========================
-# 📲 TELEGRAM FUNCTION
+# TELEGRAM
 # =========================
 def send_telegram(msg):
     try:
@@ -46,7 +48,7 @@ def send_telegram(msg):
         pass
 
 # =========================
-# 🤖 AI LOGIC
+# AI LOGIC
 # =========================
 def ai_decision(rsi, price, ema, vwap):
     score = 0
@@ -72,13 +74,12 @@ def ai_decision(rsi, price, ema, vwap):
 # MAIN BOT
 # =========================
 def run_bot():
-    global in_position, entry_price
+    global in_position, entry_price, total_profit, trade_count
 
-    print("🤖 Smart AI Trading Started", flush=True)
+    print("🤖 PRO AI BOT STARTED", flush=True)
 
     while True:
         try:
-            # Market data
             url = f"https://api.binance.com/api/v3/klines?symbol={SYMBOL}&interval=1m&limit=50"
             data = requests.get(url).json()
 
@@ -90,7 +91,6 @@ def run_bot():
             df["close"] = df["close"].astype(float)
             df["volume"] = df["volume"].astype(float)
 
-            # Indicators
             rsi = RSIIndicator(df["close"]).rsi()
             ema = EMAIndicator(df["close"], window=9).ema_indicator()
             df["vwap"] = (df["close"] * df["volume"]).cumsum() / df["volume"].cumsum()
@@ -107,11 +107,6 @@ def run_bot():
             decision = ai_decision(latest_rsi, latest_price, latest_ema, latest_vwap)
             print(f"🤖 AI Score: {decision}", flush=True)
 
-            # Debug conditions
-            print(f"RSI cond (<35): {latest_rsi < 35}", flush=True)
-            print(f"EMA cond: {latest_price > latest_ema}", flush=True)
-            print(f"VWAP cond: {latest_price > latest_vwap}", flush=True)
-
             # =========================
             # ENTRY
             # =========================
@@ -120,9 +115,15 @@ def run_bot():
                 if decision >= 2 and latest_price > latest_ema and latest_price > latest_vwap:
 
                     print("🚀 BUY SIGNAL", flush=True)
-                    send_telegram(f"🚀 BUY {SYMBOL} at {latest_price}")
 
-                    order = client.order_market_buy(
+                    send_telegram(f"""
+🚀 BUY SIGNAL
+Pair: {SYMBOL}
+Price: {latest_price}
+AI Score: {decision}
+""")
+
+                    client.order_market_buy(
                         symbol=SYMBOL,
                         quantity=QUANTITY
                     )
@@ -136,48 +137,64 @@ def run_bot():
                     print("⏳ No trade", flush=True)
 
             # =========================
-            # EXIT
+            # EXIT (TRAILING STOP)
             # =========================
             elif in_position:
 
-                stop_loss = entry_price * 0.995
-                target = entry_price * 1.015
+                profit_percent = (latest_price - entry_price) / entry_price * 100
 
-                print(f"🛑 SL: {stop_loss} | 🎯 Target: {target}", flush=True)
+                stop_loss = entry_price * 0.995
+
+                if profit_percent > 0.5:
+                    stop_loss = entry_price
+
+                if profit_percent > 1:
+                    stop_loss = entry_price * 1.003
+
+                if profit_percent > 2:
+                    stop_loss = entry_price * 1.01
+
+                print(f"📈 Profit: {profit_percent:.2f}%", flush=True)
+                print(f"🛑 Trailing SL: {stop_loss}", flush=True)
 
                 if latest_price <= stop_loss:
-                    print("❌ STOP LOSS HIT", flush=True)
-                    send_telegram(f"❌ SL HIT {SYMBOL} at {latest_price}")
+
+                    print("❌ EXIT (Trailing SL HIT)", flush=True)
 
                     client.order_market_sell(
                         symbol=SYMBOL,
                         quantity=QUANTITY
                     )
 
-                    in_position = False
+                    profit = (latest_price - entry_price) * QUANTITY
+                    total_profit += profit
+                    trade_count += 1
 
-                elif latest_price >= target:
-                    print("💰 TARGET HIT", flush=True)
-                    send_telegram(f"💰 TARGET HIT {SYMBOL} at {latest_price}")
+                    print(f"💰 Trade Profit: {profit}", flush=True)
+                    print(f"📊 Total Profit: {total_profit}", flush=True)
 
-                    client.order_market_sell(
-                        symbol=SYMBOL,
-                        quantity=QUANTITY
-                    )
+                    send_telegram(f"""
+❌ EXIT
+Pair: {SYMBOL}
+Price: {latest_price}
+Profit: {profit}
+Total Profit: {total_profit}
+Trades: {trade_count}
+""")
 
                     in_position = False
 
                 else:
-                    print("⏳ Holding", flush=True)
+                    print("⏳ Holding (Trailing Active)", flush=True)
 
         except Exception as e:
             print("❌ Error:", str(e), flush=True)
 
         time.sleep(20)
 
-# Run in background
+# Run bot
 Thread(target=run_bot).start()
 
-# Render port
+# Render server
 port = int(os.environ.get("PORT", 10000))
 app.run(host="0.0.0.0", port=port)

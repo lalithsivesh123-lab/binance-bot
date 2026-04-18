@@ -36,6 +36,7 @@ wins = 0
 losses = 0
 last_trade = "No trades yet"
 win_rate = 0
+profit_history = []
 
 daily_loss = 0
 max_daily_loss = -5
@@ -48,20 +49,25 @@ def dashboard():
     status = "🟢 IN TRADE" if in_position else "⏳ WAITING"
     avg_profit = total_profit / trade_count if trade_count > 0 else 0
 
+    labels = list(range(len(profit_history)))
+    data = profit_history
+
     return f"""
     <html>
     <head>
         <title>Pro Trading Dashboard</title>
         <meta http-equiv="refresh" content="10">
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     </head>
-    <body style="font-family: Arial; background:#0d1117; color:white; padding:20px;">
-        <h1>🤖 PRO AI TRADING DASHBOARD</h1>
 
+    <body style="background:#0d1117; color:white; font-family:Arial; padding:20px;">
+
+        <h1>🤖 PRO AI DASHBOARD</h1>
         <h2>Status: {status}</h2>
 
         <hr>
 
-        <p>📊 Total Trades: {trade_count}</p>
+        <p>📊 Trades: {trade_count}</p>
         <p>✅ Wins: {wins}</p>
         <p>❌ Losses: {losses}</p>
         <p>🎯 Win Rate: {win_rate:.2f}%</p>
@@ -69,11 +75,30 @@ def dashboard():
         <hr>
 
         <p>💰 Total Profit: {total_profit:.2f} USDT</p>
-        <p>📈 Avg Profit/Trade: {avg_profit:.2f} USDT</p>
+        <p>📈 Avg Profit: {avg_profit:.2f} USDT</p>
+        <p>📌 Last Trade: {last_trade}</p>
 
         <hr>
 
-        <p>📌 Last Trade: {last_trade}</p>
+        <h3>📈 Profit Curve</h3>
+        <canvas id="chart"></canvas>
+
+        <script>
+            const ctx = document.getElementById('chart');
+            new Chart(ctx, {{
+                type: 'line',
+                data: {{
+                    labels: {labels},
+                    datasets: [{{
+                        label: 'Profit',
+                        data: {data},
+                        borderColor: 'lime',
+                        fill: false
+                    }}]
+                }}
+            }});
+        </script>
+
     </body>
     </html>
     """
@@ -96,7 +121,6 @@ def get_quantity(price):
     risk_per_trade = 0.02
     risk_amount = capital * risk_per_trade
     stop_loss_percent = 0.005
-
     qty = risk_amount / (price * stop_loss_percent)
     return round(qty, 5)
 
@@ -155,7 +179,7 @@ def ai_decision(df):
         score += 1
     if price > vwap_val:
         score += 1
-    if 30 < rsi_val < 45:
+    if 30 < rsi_val < 55:
         score += 2
     if close.iloc[-1] > close.iloc[-2]:
         score += 1
@@ -167,7 +191,8 @@ def ai_decision(df):
 # =========================
 def run_strategy():
     global in_position, entry_price, quantity
-    global total_profit, trade_count, wins, losses, last_trade, win_rate, daily_loss
+    global total_profit, trade_count, wins, losses
+    global last_trade, win_rate, daily_loss, profit_history
 
     if daily_loss <= max_daily_loss:
         print("🛑 Daily loss limit reached", flush=True)
@@ -184,7 +209,7 @@ def run_strategy():
 
     # ENTRY
     if not in_position:
-        if score >= 5 and trend == "UP" and rsi < 50 and not is_sideways(df) and volume_ok:
+        if score >= 4 and trend == "UP" and rsi < 55 and not is_sideways(df) and volume_ok:
 
             quantity = get_quantity(price)
             client.order_market_buy(symbol=SYMBOL, quantity=quantity)
@@ -228,6 +253,8 @@ def run_strategy():
 
             if trade_count > 0:
                 win_rate = (wins / trade_count) * 100
+
+            profit_history.append(total_profit)
 
             send_telegram(last_trade)
 

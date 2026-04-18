@@ -10,10 +10,6 @@ from ta.trend import EMAIndicator
 
 app = Flask(__name__)
 
-@app.route('/')
-def home():
-    return "🤖 24/7 Ultra Pro Bot Running!"
-
 # =========================
 # ENV VARIABLES
 # =========================
@@ -26,15 +22,45 @@ client = Client(API_KEY, API_SECRET)
 client.API_URL = "https://testnet.binance.vision/api"
 
 # =========================
-# SETTINGS
+# GLOBAL STATS
 # =========================
-SYMBOL = "BTCUSDT"
-QUANTITY = 0.001
-
 in_position = False
 entry_price = 0
+quantity = 0
+
 total_profit = 0
 trade_count = 0
+wins = 0
+losses = 0
+last_trade = "No trades yet"
+
+daily_loss = 0
+max_daily_loss = -5  # stop after -5 USDT
+
+SYMBOL = "BTCUSDT"
+
+# =========================
+# DASHBOARD
+# =========================
+@app.route('/')
+def dashboard():
+    return f"""
+    <html>
+    <head>
+        <title>Trading Dashboard</title>
+        <meta http-equiv="refresh" content="10">
+    </head>
+    <body style="font-family: Arial; background:#111; color:#0f0;">
+        <h1>🤖 AI Trading Dashboard</h1>
+        <h2>Status: RUNNING</h2>
+        <p>Total Trades: {trade_count}</p>
+        <p>Wins: {wins}</p>
+        <p>Losses: {losses}</p>
+        <p>Total Profit: {total_profit:.2f} USDT</p>
+        <p>Last Trade: {last_trade}</p>
+    </body>
+    </html>
+    """
 
 # =========================
 # TELEGRAM
@@ -48,7 +74,20 @@ def send_telegram(msg):
         pass
 
 # =========================
-# GET DATA
+# POSITION SIZE
+# =========================
+def get_quantity(price):
+    capital = 100
+    risk_per_trade = 0.02
+
+    risk_amount = capital * risk_per_trade
+    stop_loss_percent = 0.005
+
+    qty = risk_amount / (price * stop_loss_percent)
+    return round(qty, 5)
+
+# =========================
+# DATA
 # =========================
 def get_klines(interval):
     url = f"https://api.binance.com/api/v3/klines?symbol={SYMBOL}&interval={interval}&limit=50"
@@ -60,24 +99,30 @@ def get_klines(interval):
     ])
 
     df["close"] = df["close"].astype(float)
+    df["high"] = df["high"].astype(float)
+    df["low"] = df["low"].astype(float)
     df["volume"] = df["volume"].astype(float)
 
     return df
 
 # =========================
-# 5M TREND
+# SIDEWAYS FILTER
+# =========================
+def is_sideways(df):
+    range_percent = ((df["high"].max() - df["low"].min()) / df["low"].min()) * 100
+    return range_percent < 0.5
+
+# =========================
+# TREND
 # =========================
 def trend_5m():
     df = get_klines("5m")
-
-    close = df["close"]
-    ema21 = EMAIndicator(close, window=21).ema_indicator()
-    ema50 = EMAIndicator(close, window=50).ema_indicator()
-
+    ema21 = EMAIndicator(df["close"], window=21).ema_indicator()
+    ema50 = EMAIndicator(df["close"], window=50).ema_indicator()
     return "UP" if ema21.iloc[-1] > ema50.iloc[-1] else "DOWN"
 
 # =========================
-# AI DECISION
+# AI
 # =========================
 def ai_decision(df):
     close = df["close"]
@@ -87,64 +132,60 @@ def ai_decision(df):
     ema50 = EMAIndicator(close, window=50).ema_indicator()
     vwap = (df["close"] * df["volume"]).cumsum() / df["volume"].cumsum()
 
-    latest_price = close.iloc[-1]
-    latest_rsi = rsi.iloc[-1]
-    latest_vwap = vwap.iloc[-1]
+    price = close.iloc[-1]
+    rsi_val = rsi.iloc[-1]
+    vwap_val = vwap.iloc[-1]
 
     score = 0
 
     if ema21.iloc[-1] > ema50.iloc[-1]:
         score += 2
-    else:
-        score -= 2
-
-    if latest_price > ema21.iloc[-1]:
+    if price > ema21.iloc[-1]:
         score += 1
-
-    if latest_price > latest_vwap:
+    if price > vwap_val:
         score += 1
-
-    if 30 < latest_rsi < 45:
+    if 30 < rsi_val < 45:
         score += 2
-
     if close.iloc[-1] > close.iloc[-2]:
         score += 1
 
-    return score, latest_price, latest_rsi, latest_vwap
+    return score, price, rsi_val, vwap_val
 
 # =========================
 # STRATEGY
 # =========================
 def run_strategy():
-    global in_position, entry_price, total_profit, trade_count
+    global in_position, entry_price, quantity
+    global total_profit, trade_count, wins, losses, last_trade, daily_loss
+
+    if daily_loss <= max_daily_loss:
+        print("🛑 Daily loss limit reached", flush=True)
+        return
 
     df = get_klines("1m")
     trend = trend_5m()
 
     score, price, rsi, vwap = ai_decision(df)
 
-    print(f"\n💰 Price: {price}", flush=True)
-    print(f"📉 RSI: {rsi}", flush=True)
-    print(f"📊 VWAP: {vwap}", flush=True)
-    print(f"📊 5M Trend: {trend}", flush=True)
-    print(f"🤖 AI Score: {score}", flush=True)
+    volume_avg = df["volume"].rolling(10).mean().iloc[-1]
+    volume_ok = df["volume"].iloc[-1] > volume_avg
+
+    print(f"Price: {price} | Score: {score}", flush=True)
 
     # ENTRY
     if not in_position:
-        if score >= 5 and trend == "UP" and rsi < 50:
+        if score >= 5 and trend == "UP" and rsi < 50 and not is_sideways(df) and volume_ok:
 
-            print("🚀 STRONG BUY", flush=True)
-            send_telegram(f"🚀 BUY\nPrice: {price}\nScore: {score}")
+            quantity = get_quantity(price)
 
-            client.order_market_buy(symbol=SYMBOL, quantity=QUANTITY)
+            client.order_market_buy(symbol=SYMBOL, quantity=quantity)
 
             entry_price = price
             in_position = True
 
-        else:
-            print("⏳ No trade", flush=True)
+            send_telegram(f"🚀 BUY {price}")
 
-    # EXIT (TRAILING)
+    # EXIT
     else:
         profit_percent = (price - entry_price) / entry_price * 100
         stop_loss = entry_price * 0.995
@@ -156,43 +197,48 @@ def run_strategy():
         if profit_percent > 2:
             stop_loss = entry_price * 1.01
 
-        print(f"📈 Profit: {profit_percent:.2f}%", flush=True)
-        print(f"🛑 SL: {stop_loss}", flush=True)
+        # Partial profit
+        if profit_percent > 1:
+            client.order_market_sell(symbol=SYMBOL, quantity=quantity / 2)
 
         if price <= stop_loss:
-            print("❌ EXIT", flush=True)
+            client.order_market_sell(symbol=SYMBOL, quantity=quantity / 2)
 
-            client.order_market_sell(symbol=SYMBOL, quantity=QUANTITY)
-
-            profit = (price - entry_price) * QUANTITY
+            profit = (price - entry_price) * quantity
             total_profit += profit
             trade_count += 1
 
-            send_telegram(f"❌ EXIT\nProfit: {profit}\nTotal: {total_profit}")
+            if profit > 0:
+                wins += 1
+                result = "WIN"
+            else:
+                losses += 1
+                daily_loss += profit
+                result = "LOSS"
+
+            last_trade = f"{result} | {profit:.2f} USDT"
+
+            send_telegram(last_trade)
 
             in_position = False
 
-        else:
-            print("⏳ Holding", flush=True)
-
 # =========================
-# MAIN LOOP (AUTO-RESTART)
+# MAIN LOOP
 # =========================
 def run_bot():
-    print("🔥 BOT STARTED (24/7 MODE)", flush=True)
-    send_telegram("🤖 Bot Started & Running 24/7")
+    send_telegram("🤖 BOT STARTED 24/7")
 
     while True:
         try:
             run_strategy()
         except Exception as e:
-            print("❌ ERROR:", str(e), flush=True)
             send_telegram(f"⚠️ Error: {str(e)}")
-            time.sleep(10)
+        time.sleep(20)
 
-# Run in background
 Thread(target=run_bot).start()
 
-# Render server
+# =========================
+# SERVER
+# =========================
 port = int(os.environ.get("PORT", 10000))
 app.run(host="0.0.0.0", port=port)

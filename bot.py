@@ -22,8 +22,10 @@ client = Client(API_KEY, API_SECRET)
 client.API_URL = "https://testnet.binance.vision/api"
 
 # =========================
-# GLOBAL STATS
+# GLOBAL STATE
 # =========================
+SYMBOL = "BTCUSDT"
+
 in_position = False
 entry_price = 0
 quantity = 0
@@ -33,31 +35,45 @@ trade_count = 0
 wins = 0
 losses = 0
 last_trade = "No trades yet"
+win_rate = 0
 
 daily_loss = 0
-max_daily_loss = -5  # stop after -5 USDT
-
-SYMBOL = "BTCUSDT"
+max_daily_loss = -5
 
 # =========================
 # DASHBOARD
 # =========================
 @app.route('/')
 def dashboard():
+    status = "🟢 IN TRADE" if in_position else "⏳ WAITING"
+    avg_profit = total_profit / trade_count if trade_count > 0 else 0
+
     return f"""
     <html>
     <head>
-        <title>Trading Dashboard</title>
+        <title>Pro Trading Dashboard</title>
         <meta http-equiv="refresh" content="10">
     </head>
-    <body style="font-family: Arial; background:#111; color:#0f0;">
-        <h1>🤖 AI Trading Dashboard</h1>
-        <h2>Status: RUNNING</h2>
-        <p>Total Trades: {trade_count}</p>
-        <p>Wins: {wins}</p>
-        <p>Losses: {losses}</p>
-        <p>Total Profit: {total_profit:.2f} USDT</p>
-        <p>Last Trade: {last_trade}</p>
+    <body style="font-family: Arial; background:#0d1117; color:white; padding:20px;">
+        <h1>🤖 PRO AI TRADING DASHBOARD</h1>
+
+        <h2>Status: {status}</h2>
+
+        <hr>
+
+        <p>📊 Total Trades: {trade_count}</p>
+        <p>✅ Wins: {wins}</p>
+        <p>❌ Losses: {losses}</p>
+        <p>🎯 Win Rate: {win_rate:.2f}%</p>
+
+        <hr>
+
+        <p>💰 Total Profit: {total_profit:.2f} USDT</p>
+        <p>📈 Avg Profit/Trade: {avg_profit:.2f} USDT</p>
+
+        <hr>
+
+        <p>📌 Last Trade: {last_trade}</p>
     </body>
     </html>
     """
@@ -68,8 +84,7 @@ def dashboard():
 def send_telegram(msg):
     try:
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-        data = {"chat_id": CHAT_ID, "text": msg}
-        requests.post(url, data=data)
+        requests.post(url, data={"chat_id": CHAT_ID, "text": msg})
     except:
         pass
 
@@ -79,7 +94,6 @@ def send_telegram(msg):
 def get_quantity(price):
     capital = 100
     risk_per_trade = 0.02
-
     risk_amount = capital * risk_per_trade
     stop_loss_percent = 0.005
 
@@ -106,15 +120,12 @@ def get_klines(interval):
     return df
 
 # =========================
-# SIDEWAYS FILTER
+# FILTERS
 # =========================
 def is_sideways(df):
     range_percent = ((df["high"].max() - df["low"].min()) / df["low"].min()) * 100
     return range_percent < 0.5
 
-# =========================
-# TREND
-# =========================
 def trend_5m():
     df = get_klines("5m")
     ema21 = EMAIndicator(df["close"], window=21).ema_indicator()
@@ -122,7 +133,7 @@ def trend_5m():
     return "UP" if ema21.iloc[-1] > ema50.iloc[-1] else "DOWN"
 
 # =========================
-# AI
+# AI DECISION
 # =========================
 def ai_decision(df):
     close = df["close"]
@@ -149,14 +160,14 @@ def ai_decision(df):
     if close.iloc[-1] > close.iloc[-2]:
         score += 1
 
-    return score, price, rsi_val, vwap_val
+    return score, price, rsi_val
 
 # =========================
 # STRATEGY
 # =========================
 def run_strategy():
     global in_position, entry_price, quantity
-    global total_profit, trade_count, wins, losses, last_trade, daily_loss
+    global total_profit, trade_count, wins, losses, last_trade, win_rate, daily_loss
 
     if daily_loss <= max_daily_loss:
         print("🛑 Daily loss limit reached", flush=True)
@@ -164,8 +175,7 @@ def run_strategy():
 
     df = get_klines("1m")
     trend = trend_5m()
-
-    score, price, rsi, vwap = ai_decision(df)
+    score, price, rsi = ai_decision(df)
 
     volume_avg = df["volume"].rolling(10).mean().iloc[-1]
     volume_ok = df["volume"].iloc[-1] > volume_avg
@@ -177,13 +187,12 @@ def run_strategy():
         if score >= 5 and trend == "UP" and rsi < 50 and not is_sideways(df) and volume_ok:
 
             quantity = get_quantity(price)
-
             client.order_market_buy(symbol=SYMBOL, quantity=quantity)
 
             entry_price = price
             in_position = True
 
-            send_telegram(f"🚀 BUY {price}")
+            send_telegram(f"🚀 BUY at {price}")
 
     # EXIT
     else:
@@ -197,7 +206,6 @@ def run_strategy():
         if profit_percent > 2:
             stop_loss = entry_price * 1.01
 
-        # Partial profit
         if profit_percent > 1:
             client.order_market_sell(symbol=SYMBOL, quantity=quantity / 2)
 
@@ -217,6 +225,9 @@ def run_strategy():
                 result = "LOSS"
 
             last_trade = f"{result} | {profit:.2f} USDT"
+
+            if trade_count > 0:
+                win_rate = (wins / trade_count) * 100
 
             send_telegram(last_trade)
 
